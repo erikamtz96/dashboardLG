@@ -15,21 +15,21 @@ Cada página trae su propia URL — puedes mandarle a José Antonio directo el
 link de `cargos.html`, por ejemplo. La navegación de arriba te mueve entre
 las cinco.
 
-## Cómo conectarlo al Sheet de Merari (sin editar código)
+## Conexión al Sheet de Merari
 
-1. Publica el sitio (pasos abajo).
-2. Abre la URL pública → ve a la pestaña **Configuración** en el menú de arriba.
-3. Sigue las 4 instrucciones en pantalla: abre el Sheet de Merari, confirma que
-   esté compartido como **"Cualquier persona con el enlace — Lector"**, entra a
-   cada una de las dos pestañas de bitácora, copia la URL completa de la barra
-   del navegador (incluye `#gid=...`) y pégala en el campo correspondiente.
-4. Clic en **"Probar conexión"** para confirmar que lee bien antes de guardar.
-5. Clic en **"Guardar y entrar al dashboard"**.
+El dashboard viene **conectado de fábrica** — las dos URLs de bitácora están
+guardadas como default directo en `app.js` (Bitácora 1: Mayo-Agosto, Bitácora
+2: Agosto-Diciembre), así que cualquiera que abra el link público ya ve los
+datos en vivo sin configurar nada.
 
-Eso es todo — no hay que tocar `index.html` ni ningún archivo. La conexión
-queda guardada en el navegador (localStorage), así que si abres el dashboard
-desde otra computadora, hay que repetir esta configuración una vez ahí
-también (es local a cada navegador, no se comparte automáticamente).
+Si algún día cambia el Sheet (por ejemplo, se abre una tercera bitácora),
+hay dos formas de actualizarlo:
+
+- **Para todos (recomendado):** edita las dos URLs en `DEFAULT_RAW_URLS` al
+  principio de `app.js` y vuelve a hacer `git push` — Vercel republica solo.
+- **Solo en un navegador:** ve a la pestaña **Configuración** en el menú de
+  arriba, pega las nuevas URLs y guarda. Esto se guarda en localStorage y
+  sobreescribe el default, pero solo en ese navegador — no afecta a nadie más.
 
 Cada vez que alguien abre cualquiera de las páginas, se vuelve a leer el
 Sheet en ese momento — siempre está al día, no hay caché ni espera.

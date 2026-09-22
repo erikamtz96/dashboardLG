@@ -1,14 +1,28 @@
-// ======================= Config (guardada en el navegador, no en el código) ===
+// ======================= Config ================================================
+// Conectado de fábrica al Sheet de Merari (Bitácora 1: Mayo-Agosto, Bitácora 2:
+// Agosto-Diciembre). Quien abra el dashboard ya ve los datos en vivo sin
+// configurar nada. Si algún día cambia el Sheet, basta con actualizar estas
+// dos URLs aquí (o usar Configuración para sobreescribirlo solo en un navegador).
+const DEFAULT_RAW_URLS = [
+  'https://docs.google.com/spreadsheets/d/1TI4c6d1ANwW94SXY3REi3W-6Y59CJXftbyJcYefwzgI/edit?gid=1114020288#gid=1114020288',
+  'https://docs.google.com/spreadsheets/d/1TI4c6d1ANwW94SXY3REi3W-6Y59CJXftbyJcYefwzgI/edit?gid=1112205141#gid=1112205141',
+];
+const DEFAULT_CONFIG = {
+  rawUrls: DEFAULT_RAW_URLS,
+  csvUrls: DEFAULT_RAW_URLS.map(sheetUrlToCsvUrl),
+};
+
 const CONFIG_KEY = 'merari_dashboard_config_v1';
 
 function getConfig() {
   try {
     const raw = localStorage.getItem(CONFIG_KEY);
-    if (!raw) return null;
-    const cfg = JSON.parse(raw);
-    if (!cfg.csvUrls || cfg.csvUrls.length < 2) return null;
-    return cfg;
-  } catch (e) { return null; }
+    if (raw) {
+      const cfg = JSON.parse(raw);
+      if (cfg.csvUrls && cfg.csvUrls.length >= 2) return cfg;
+    }
+  } catch (e) { /* ignora y cae al default */ }
+  return DEFAULT_CONFIG;
 }
 
 function saveConfig(cfg) {
