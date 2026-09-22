@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resumen — Dashboard Merari</title>
+<link rel="stylesheet" href="styles.css">
+<script src="chart.umd.min.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<div class="wrap">
+  <h1>Resumen</h1>
+  <p class="subtitle">Avantech · Leído en vivo desde el Sheet de Merari cada vez que se abre esta página.</p>
+
+  <div id="loading">Cargando datos en vivo desde el Sheet…</div>
+  <div id="loadError" class="banner error" style="display:none;"></div>
+
+  <div class="content" id="content">
+    <div class="banner">
+      <b>Cobertura de datos:</b> el desglose usa la columna <b>Industria</b> del log (dato completo al 100%) en vez de
+      Sector/Subsector de la lista maestra, porque el cruce por nombre de empresa solo cubre ~39% de los contactos.
+      Tampoco existe todavía una columna de <b>"script usado"</b> — sin ella no se puede medir qué mensaje convierte
+      mejor. Ambos puntos están detallados en el plan de trabajo de Merari.
+    </div>
+
+    <div class="cards">
+      <div class="card"><div class="label">Total prospectados</div><div class="value" id="kpi-total"></div></div>
+      <div class="card"><div class="label">Invites aceptados</div><div class="value" id="kpi-acc"></div></div>
+      <div class="card"><div class="label">Tasa de aceptación</div><div class="value" id="kpi-rate"></div></div>
+      <div class="card"><div class="label">Primeros mensajes enviados</div><div class="value" id="kpi-msg"></div></div>
+    </div>
+
+    <div class="grid2">
+      <div class="panel">
+        <h2>Prospectados por semana</h2>
+        <canvas id="chartWeekVol"></canvas>
+      </div>
+      <div class="panel">
+        <h2>Tasa de aceptación por semana</h2>
+        <canvas id="chartWeekRate"></canvas>
+        <div class="note">Referencia: verde ≥35%, amarillo 20–34%, rojo &lt;20%</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Datos leídos directo del Sheet — nada se guarda en ningún servidor propio.</footer>
+</div>
+
+<script src="nav.js"></script>
+<script src="app.js"></script>
+<script>
+renderNav('resumen');
+
+function fmtWeek(iso) {
+  const d = new Date(iso + 'T00:00:00Z');
+  return d.toLocaleDateString('es-MX', {day:'2-digit', month:'short', timeZone:'UTC'});
+}
+
+async function main() {
+  try {
+    const DATA = await Dashboard.load();
+    setNavUpdated(DATA.summary.updated);
+
+    document.getElementById('kpi-total').textContent = DATA.summary.total_prospectados;
+    document.getElementById('kpi-acc').textContent = DATA.summary.total_aceptados;
+    document.getElementById('kpi-rate').textContent = DATA.summary.tasa_aceptacion_global + '%';
+    document.getElementById('kpi-msg').textContent = DATA.summary.total_mensajes;
+
+    const css = getComputedStyle(document.documentElement);
+    const v = (name) => css.getPropertyValue(name).trim();
+    Chart.defaults.font.family = "system-ui, -apple-system, 'Segoe UI', sans-serif";
+    Chart.defaults.color = v('--text-secondary');
+    Chart.defaults.borderColor = v('--grid');
+
+    new Chart(document.getElementById('chartWeekVol'), {
+      type: 'bar',
+      data: { labels: DATA.weekly.map(w => fmtWeek(w.semana)),
+        datasets: [{ label: 'Prospectados', data: DATA.weekly.map(w => w.prospectados),
+          backgroundColor: v('--series-1'), borderRadius: 4, maxBarThickness: 48 }] },
+      options: { plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, grid: { color: v('--grid') } }, x: { grid: { display: false } } } }
+    });
+
+    new Chart(document.getElementById('chartWeekRate'), {
+      type: 'line',
+      data: { labels: DATA.weekly.map(w => fmtWeek(w.semana)),
+        datasets: [{ label: 'Tasa de aceptación (%)', data: DATA.weekly.map(w => w.tasa),
+          borderColor: v('--series-2'), backgroundColor: v('--series-2'), tension: 0.25, pointRadius: 4, borderWidth: 2 }] },
+      options: { plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { callback: (val) => val + '%' }, grid: { color: v('--grid') } }, x: { grid: { display: false } } } }
+    });
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+  } catch (e) {
+    document.getElementById('loading').style.display = 'none';
+    const err = document.getElementById('loadError');
+    err.style.display = 'block';
+    if (e.message === 'SIN_CONFIGURAR') {
+      err.innerHTML = '<b>Todavía no conectaste el Sheet de Merari.</b> Ve a <a href="config.html">Configuración</a> y pega las URLs de las dos bitácoras.';
+    } else {
+      err.innerHTML = '<b>No se pudo cargar el Sheet en vivo.</b> ' + e.message + ' Revisa <a href="config.html">Configuración</a>.';
+    }
+  }
+}
+main();
+</script>
+</body>
+</html>

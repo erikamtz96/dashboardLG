@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configuración — Dashboard Merari</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="nav"></div>
+<div class="wrap">
+  <h1>Configuración</h1>
+  <p class="subtitle">Conecta el dashboard al Sheet de Merari. Esto se guarda solo en este navegador — no se sube a ningún lado.</p>
+
+  <div class="form-panel">
+    <ol class="steps">
+      <li>Abre el Google Sheet de Merari. Confirma que esté compartido como
+        <b>"Cualquier persona con el enlace — Lector"</b> (Compartir → arriba a la derecha).</li>
+      <li>Haz clic en la pestaña de la <b>primera bitácora</b> para que quede seleccionada.</li>
+      <li>Copia la URL completa de la barra del navegador (incluye <code>#gid=...</code> al final) y pégala abajo.</li>
+      <li>Repite lo mismo con la pestaña de la <b>segunda bitácora</b>.</li>
+    </ol>
+
+    <form id="cfgForm">
+      <div class="field">
+        <label for="url1">URL de la pestaña — Bitácora 1</label>
+        <input type="text" id="url1" placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=123456789">
+      </div>
+      <div class="field">
+        <label for="url2">URL de la pestaña — Bitácora 2</label>
+        <input type="text" id="url2" placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=987654321">
+        <div class="hint">Si ambas bitácoras viven en el mismo Sheet, solo cambia el <code>gid</code> entre una y otra pestaña — eso es normal.</div>
+      </div>
+      <button type="submit" class="btn">Guardar y entrar al dashboard</button>
+      <button type="button" class="btn-secondary" id="testBtn">Probar conexión</button>
+      <div class="status-msg" id="statusMsg"></div>
+    </form>
+  </div>
+</div>
+
+<script src="nav.js"></script>
+<script src="app.js"></script>
+<script>
+renderNav('config');
+
+const cfg = Dashboard.getConfig();
+if (cfg && cfg.rawUrls) {
+  document.getElementById('url1').value = cfg.rawUrls[0] || '';
+  document.getElementById('url2').value = cfg.rawUrls[1] || '';
+}
+
+function buildCsvUrls() {
+  const raw1 = document.getElementById('url1').value;
+  const raw2 = document.getElementById('url2').value;
+  const csv1 = Dashboard.sheetUrlToCsvUrl(raw1);
+  const csv2 = Dashboard.sheetUrlToCsvUrl(raw2);
+  if (!csv1 || !csv2) return null;
+  return { rawUrls: [raw1, raw2], csvUrls: [csv1, csv2] };
+}
+
+function showStatus(msg, ok) {
+  const el = document.getElementById('statusMsg');
+  el.textContent = msg;
+  el.className = 'status-msg ' + (ok ? 'ok' : 'err');
+}
+
+document.getElementById('testBtn').addEventListener('click', async () => {
+  const cfgTry = buildCsvUrls();
+  if (!cfgTry) { showStatus('No pude reconocer esas URLs como un link de Google Sheets. Revisa que hayas copiado la URL completa.', false); return; }
+  showStatus('Probando conexión…', true);
+  try {
+    const res = await Promise.all(cfgTry.csvUrls.map(u => fetch(u, { cache: 'no-store' })));
+    const bad = res.find(r => !r.ok);
+    if (bad) { showStatus('El Sheet respondió con un error (HTTP ' + bad.status + '). Revisa que esté compartido como "Cualquier persona con el enlace".', false); return; }
+    const texts = await Promise.all(res.map(r => r.text()));
+    const rows0 = texts[0].split('\n').filter(Boolean).length - 1;
+    const rows1 = texts[1].split('\n').filter(Boolean).length - 1;
+    showStatus(`Conexión exitosa — Bitácora 1: ~${rows0} filas · Bitácora 2: ~${rows1} filas.`, true);
+  } catch (e) {
+    showStatus('No se pudo conectar: ' + e.message, false);
+  }
+});
+
+document.getElementById('cfgForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const cfgNew = buildCsvUrls();
+  if (!cfgNew) { showStatus('No pude reconocer esas URLs como un link de Google Sheets. Revisa que hayas copiado la URL completa.', false); return; }
+  Dashboard.saveConfig(cfgNew);
+  showStatus('Guardado. Entrando al dashboard…', true);
+  setTimeout(() => { window.location.href = 'index.html'; }, 500);
+});
+</script>
+</body>
+</html>

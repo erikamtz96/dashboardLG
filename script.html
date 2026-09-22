@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Categoría de script — Dashboard Merari</title>
+<link rel="stylesheet" href="styles.css">
+<script src="chart.umd.min.js"></script>
+</head>
+<body>
+<div id="nav"></div>
+<div class="wrap">
+  <h1>Prospectados por categoría de script</h1>
+  <p class="subtitle">Cada cargo normalizado se mapea a una de las 6 categorías de tu guía de scripts (Legal/Compliance, Finanzas, HSE/EHS, Compras, RH, TI/Operaciones).</p>
+
+  <div id="loading">Cargando datos en vivo desde el Sheet…</div>
+  <div id="loadError" class="banner error" style="display:none;"></div>
+
+  <div class="content" id="content">
+    <div class="panel">
+      <canvas id="chartScript" style="max-height:460px;"></canvas>
+    </div>
+    <div class="panel">
+      <h2>Detalle por categoría de script</h2>
+      <table id="tbl">
+        <thead><tr><th>Categoría de script</th><th class="num">Prospectados</th><th class="num">Aceptados</th><th class="num">Tasa</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+  <footer>Datos leídos directo del Sheet — nada se guarda en ningún servidor propio.</footer>
+</div>
+
+<script src="nav.js"></script>
+<script src="app.js"></script>
+<script>
+renderNav('script');
+
+async function main() {
+  try {
+    const DATA = await Dashboard.load();
+    setNavUpdated(DATA.summary.updated);
+
+    const css = getComputedStyle(document.documentElement);
+    const v = (name) => css.getPropertyValue(name).trim();
+    Chart.defaults.font.family = "system-ui, -apple-system, 'Segoe UI', sans-serif";
+    Chart.defaults.color = v('--text-secondary');
+    Chart.defaults.borderColor = v('--grid');
+
+    const sorted = [...DATA.categoria_script].sort((a,b) => b.prospectados - a.prospectados);
+    new Chart(document.getElementById('chartScript'), {
+      type: 'bar',
+      data: { labels: sorted.map(c => c.categoria),
+        datasets: [{ label: 'Prospectados', data: sorted.map(c => c.prospectados), backgroundColor: v('--series-1'), borderRadius: 4 }] },
+      options: { indexAxis: 'y', plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, grid: { color: v('--grid') } }, y: { grid: { display: false } } } }
+    });
+
+    const tbody = document.querySelector('#tbl tbody');
+    sorted.forEach(c => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${c.categoria}</td><td class="num">${c.prospectados}</td><td class="num">${c.aceptados}</td><td class="num">${c.tasa}%</td>`;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+  } catch (e) {
+    document.getElementById('loading').style.display = 'none';
+    const err = document.getElementById('loadError');
+    err.style.display = 'block';
+    if (e.message === 'SIN_CONFIGURAR') {
+      err.innerHTML = '<b>Todavía no conectaste el Sheet de Merari.</b> Ve a <a href="config.html">Configuración</a> y pega las URLs de las dos bitácoras.';
+    } else {
+      err.innerHTML = '<b>No se pudo cargar el Sheet en vivo.</b> ' + e.message + ' Revisa <a href="config.html">Configuración</a>.';
+    }
+  }
+}
+main();
+</script>
+</body>
+</html>
