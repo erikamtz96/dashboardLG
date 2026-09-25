@@ -2,7 +2,7 @@
 
 Sitio de varias páginas (no un solo archivo HTML), sin backend ni build step:
 
-- `index.html` — Resumen (KPIs + tendencia semanal)
+- `index.html` — Resumen (KPIs + tendencia semanal + filtro de embudo por rango de fechas)
 - `cargos.html` — Desglose por cargo
 - `industria.html` — Desglose por industria
 - `script.html` — Desglose por categoría de script (guía de scripts)
@@ -54,6 +54,20 @@ git push -u origin main
 3. Deploy. En ~30 segundos tienes la URL pública para compartir.
 
 Cada `git push` a `main` vuelve a publicar automáticamente.
+
+## Filtro de embudo por fecha (Resumen)
+
+Desde Agosto-Diciembre 2026 el Sheet trae columnas nuevas: Respondió al mensaje,
+Fecha de mensaje de seguimiento, Respondió al seguimiento, Fecha de sesión
+agendada, Resultado de la sesión, Motivo de no interés/descarte y
+Script/mensaje usado. El Resumen usa "¿Invite aceptada?" + estas columnas para
+mostrar, por rango de fechas (presets de semana/mes o rango libre): cuántas
+invitaciones se aceptaron, cuántas de esas respondieron mensaje (primer mensaje
+o seguimiento) y cuántas llegaron a agendar sesión. El rango se calcula sobre
+la fecha en que se aceptó la invitación, no la fecha de prospección.
+
+Mayo-Agosto no tiene estas columnas todavía (son de hoy en adelante), así que
+para ese periodo el filtro simplemente no suma nada ahí — no rompe los números.
 
 ## Notas sobre los datos
 

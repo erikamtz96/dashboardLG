@@ -31,6 +31,29 @@
       <div class="card"><div class="label">Primeros mensajes enviados</div><div class="value" id="kpi-msg"></div></div>
     </div>
 
+    <h2 style="font-size:15px;margin:0 0 10px;">Embudo por fecha de invite aceptada</h2>
+    <div class="filter-panel">
+      <div class="filter-row" id="presetRow">
+        <button type="button" class="preset-btn" data-preset="7">Última semana</button>
+        <button type="button" class="preset-btn" data-preset="30">Último mes</button>
+        <button type="button" class="preset-btn" data-preset="90">Últimos 3 meses</button>
+        <button type="button" class="preset-btn active" data-preset="all">Todo</button>
+      </div>
+      <div class="filter-row" style="margin-top:10px;">
+        <label for="fFrom">Del</label>
+        <input type="date" id="fFrom">
+        <label for="fTo">al</label>
+        <input type="date" id="fTo">
+      </div>
+      <div class="filter-summary" id="filterSummary"></div>
+    </div>
+
+    <div class="cards">
+      <div class="card"><div class="label">Invites aceptados (rango)</div><div class="value" id="kpi-f-acc"></div></div>
+      <div class="card"><div class="label">Respondieron mensaje</div><div class="value" id="kpi-f-resp"></div></div>
+      <div class="card"><div class="label">Sesiones agendadas</div><div class="value" id="kpi-f-sesion"></div></div>
+    </div>
+
     <div class="grid2">
       <div class="panel">
         <h2>Prospectados por semana</h2>
@@ -90,6 +113,61 @@ async function main() {
       options: { plugins: { legend: { display: false } },
         scales: { y: { beginAtZero: true, ticks: { callback: (val) => val + '%' }, grid: { color: v('--grid') } }, x: { grid: { display: false } } } }
     });
+
+    // ---- Filtro por rango de fechas (embudo: aceptó invite -> respondió -> sesión) ----
+    const detalle = (DATA.aceptadosDetalle || []).filter(d => d.fecha);
+
+    function fmtDateInput(d) { return d.toISOString().slice(0,10); }
+
+    function applyFilter(fromStr, toStr) {
+      const from = fromStr || null;
+      const to = toStr || null;
+      const enRango = detalle.filter(d => (!from || d.fecha >= from) && (!to || d.fecha <= to));
+      const aceptados = enRango.length;
+      const respondieron = enRango.filter(d => d.respondio).length;
+      const sesiones = enRango.filter(d => d.sesion).length;
+      document.getElementById('kpi-f-acc').textContent = aceptados;
+      document.getElementById('kpi-f-resp').textContent = respondieron;
+      document.getElementById('kpi-f-sesion').textContent = sesiones;
+      const rangoTxt = from && to ? `del ${from} al ${to}` : (from ? `desde ${from}` : (to ? `hasta ${to}` : 'todo el histórico'));
+      document.getElementById('filterSummary').textContent =
+        `${aceptados} invite(s) aceptada(s) ${rangoTxt} — ${respondieron} respondieron mensaje, ${sesiones} llegaron a agendar sesión.`;
+    }
+
+    const fFrom = document.getElementById('fFrom');
+    const fTo = document.getElementById('fTo');
+    const presetBtns = [...document.querySelectorAll('.preset-btn')];
+
+    function setActivePreset(btn) {
+      presetBtns.forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+    }
+
+    presetBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        setActivePreset(btn);
+        const preset = btn.dataset.preset;
+        if (preset === 'all') {
+          fFrom.value = ''; fTo.value = '';
+          applyFilter(null, null);
+          return;
+        }
+        const days = parseInt(preset, 10);
+        const to = new Date();
+        const from = new Date();
+        from.setDate(from.getDate() - days);
+        fFrom.value = fmtDateInput(from);
+        fTo.value = fmtDateInput(to);
+        applyFilter(fFrom.value, fTo.value);
+      });
+    });
+
+    [fFrom, fTo].forEach(inp => inp.addEventListener('change', () => {
+      setActivePreset(null);
+      applyFilter(fFrom.value || null, fTo.value || null);
+    }));
+
+    applyFilter(null, null); // arranca mostrando "Todo"
 
     document.getElementById('loading').style.display = 'none';
     document.getElementById('content').style.display = 'block';

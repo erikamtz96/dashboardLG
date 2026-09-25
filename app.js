@@ -53,7 +53,12 @@ function sheetUrlToCsvUrl(input) {
 const EXPECTED_COLS = [
   'Fecha de prospección','Canal de contacto','País','Empresa','Industria','Nombre',
   'Apellido','Proceso','Categoría de puesto','LinkedIn','¿Quién prospectó?',
-  'Fecha de invite','¿Invite aceptada?','Fecha del primer mensaje'
+  'Fecha de invite','¿Invite aceptada?','Fecha del primer mensaje',
+  // Columnas agregadas a partir de Agosto-Diciembre 2026 (no existen en Mayo-Agosto,
+  // ahí simplemente quedan vacías — no rompe nada).
+  'Respondió al mensaje','Fecha de mensaje de seguimiento','Respondió al seguimiento',
+  'Fecha de sesión agendada','Resultado de la sesión','Motivo de no interés/descarte',
+  'Script/mensaje usado'
 ];
 
 function parseCSV(text) {
@@ -101,6 +106,14 @@ function parseInviteStatus(s) {
   if (!s || s === '\\-' || s === '-') return false;
   if (/^s[ií]/i.test(s)) return true;
   return false;
+}
+
+// "¿Invite aceptada?" viene como "Sí 19/05" — separamos el Sí/No de la fecha
+// en que se aceptó, para poder agrupar por la semana en que se aceptó.
+function parseAceptadaFecha(s) {
+  s = (s || '').trim();
+  const m = s.match(/(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/);
+  return m ? parseFecha(m[1]) : null;
 }
 
 function mondayOf(d) {
@@ -168,13 +181,22 @@ function buildData(allRecords) {
     const categoria = CARGO_TO_CATEGORIA[cargoN] || 'Sin categorizar';
     const fp = parseFecha(r['Fecha de prospección']);
     const fm = parseFecha(r['Fecha del primer mensaje']);
+    const acc = parseInviteStatus(r['¿Invite aceptada?']);
+    const accFecha = acc ? parseAceptadaFecha(r['¿Invite aceptada?']) : null;
+    const respondioMensaje = parseInviteStatus(r['Respondió al mensaje']);
+    const respondioSeguimiento = parseInviteStatus(r['Respondió al seguimiento']);
+    const sesionFecha = parseFecha(r['Fecha de sesión agendada']);
     return {
-      fp, fm,
-      acc: parseInviteStatus(r['¿Invite aceptada?']),
+      fp, fm, accFecha,
+      acc,
       msg: !!fm,
+      respondio: respondioMensaje || respondioSeguimiento,
+      sesion: !!sesionFecha,
       cargo: cargoN,
       categoria,
       industria: r['Industria'] || 'Sin dato',
+      empresa: r['Empresa'] || '',
+      nombre: [r['Nombre'], r['Apellido']].filter(Boolean).join(' '),
     };
   });
 
@@ -209,6 +231,17 @@ function buildData(allRecords) {
       });
   }
 
+  // Detalle por contacto aceptado, para el filtro por semana/rango de fechas
+  // (Resumen): cuenta cuántos aceptaron invite, cuántos de esos respondieron
+  // y cuántos llegaron a agendar sesión, según la fecha en que aceptaron.
+  const aceptadosDetalle = data.filter(d => d.acc).map(d => ({
+    fecha: d.accFecha ? d.accFecha.toISOString().slice(0,10) : null,
+    respondio: d.respondio,
+    sesion: d.sesion,
+    empresa: d.empresa,
+    nombre: d.nombre,
+  }));
+
   return {
     summary: {
       total_prospectados: total,
@@ -221,6 +254,7 @@ function buildData(allRecords) {
     cargo: breakdown('cargo'),
     categoria_script: breakdown('categoria'),
     industria: breakdown('industria'),
+    aceptadosDetalle,
   };
 }
 
