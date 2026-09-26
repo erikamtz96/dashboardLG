@@ -2,7 +2,9 @@
 
 Sitio de varias páginas (no un solo archivo HTML), sin backend ni build step:
 
-- `index.html` — Resumen (KPIs + tendencia semanal + filtro de embudo por rango de fechas)
+- `index.html` — Resumen: filtro global por rango de fechas (presets de semana/mes o
+  rango libre) que controla 7 KPIs (prospectados, invitaciones, aceptados, mensajes,
+  respuestas, seguimientos, sesiones) y una tendencia semanal multi-métrica
 - `cargos.html` — Desglose por cargo
 - `industria.html` — Desglose por industria
 - `script.html` — Desglose por categoría de script (guía de scripts)
@@ -55,19 +57,32 @@ git push -u origin main
 
 Cada `git push` a `main` vuelve a publicar automáticamente.
 
-## Filtro de embudo por fecha (Resumen)
+## Filtro global por fecha (Resumen)
 
 Desde Agosto-Diciembre 2026 el Sheet trae columnas nuevas: Respondió al mensaje,
 Fecha de mensaje de seguimiento, Respondió al seguimiento, Fecha de sesión
 agendada, Resultado de la sesión, Motivo de no interés/descarte y
-Script/mensaje usado. El Resumen usa "¿Invite aceptada?" + estas columnas para
-mostrar, por rango de fechas (presets de semana/mes o rango libre): cuántas
-invitaciones se aceptaron, cuántas de esas respondieron mensaje (primer mensaje
-o seguimiento) y cuántas llegaron a agendar sesión. El rango se calcula sobre
-la fecha en que se aceptó la invitación, no la fecha de prospección.
+Script/mensaje usado. Con ellas, el Resumen tiene un filtro (presets de
+semana/mes o rango libre, con botón de "Limpiar filtros") que recalcula, todo
+en el navegador sin releer el Sheet:
 
-Mayo-Agosto no tiene estas columnas todavía (son de hoy en adelante), así que
-para ese periodo el filtro simplemente no suma nada ahí — no rompe los números.
+- **Prospectados** — por fecha de prospección.
+- **Invitaciones enviadas** — por fecha de invite.
+- **Invites aceptados** (+ tasa de aceptación) — por fecha en que se aceptó.
+- **Mensajes enviados** — por fecha del primer mensaje.
+- **Respuestas** (+ tasa de respuesta) — mensajes en el rango que sí obtuvieron
+  respuesta (al primer mensaje o al seguimiento).
+- **Seguimientos enviados** — por fecha de mensaje de seguimiento.
+- **Sesiones agendadas** — por fecha de sesión agendada.
+
+Cada métrica se filtra por SU propia fecha, no por una sola "fecha de cohorte" —
+por eso "Sesiones agendadas del último mes" son sesiones que se agendaron ese
+mes, sin importar cuándo se prospectó al contacto originalmente. La gráfica de
+tendencia semanal usa la misma lógica por serie.
+
+Mayo-Agosto no tiene las columnas de respuesta/seguimiento/sesión todavía (son
+de hoy en adelante), así que para ese periodo esos tres números simplemente
+salen en cero — no rompe los demás.
 
 ## Notas sobre los datos
 

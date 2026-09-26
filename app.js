@@ -180,14 +180,16 @@ function buildData(allRecords) {
     const cargoN = normCargo(r['Categoría de puesto']);
     const categoria = CARGO_TO_CATEGORIA[cargoN] || 'Sin categorizar';
     const fp = parseFecha(r['Fecha de prospección']);
+    const fechaInvite = parseFecha(r['Fecha de invite']);
     const fm = parseFecha(r['Fecha del primer mensaje']);
     const acc = parseInviteStatus(r['¿Invite aceptada?']);
     const accFecha = acc ? parseAceptadaFecha(r['¿Invite aceptada?']) : null;
     const respondioMensaje = parseInviteStatus(r['Respondió al mensaje']);
     const respondioSeguimiento = parseInviteStatus(r['Respondió al seguimiento']);
+    const fechaSeguimiento = parseFecha(r['Fecha de mensaje de seguimiento']);
     const sesionFecha = parseFecha(r['Fecha de sesión agendada']);
     return {
-      fp, fm, accFecha,
+      fp, fechaInvite, fm, accFecha, fechaSeguimiento, sesionFecha,
       acc,
       msg: !!fm,
       respondio: respondioMensaje || respondioSeguimiento,
@@ -204,19 +206,6 @@ function buildData(allRecords) {
   const totalAcc = data.filter(d => d.acc).length;
   const totalMsg = data.filter(d => d.msg).length;
 
-  const weeklyMap = new Map();
-  data.forEach(d => {
-    if (!d.fp) return;
-    const k = mondayOf(d.fp).toISOString().slice(0,10);
-    if (!weeklyMap.has(k)) weeklyMap.set(k, {prospectados:0, aceptados:0, mensajes:0});
-    const w = weeklyMap.get(k);
-    w.prospectados++;
-    if (d.acc) w.aceptados++;
-    if (d.msg) w.mensajes++;
-  });
-  const weekly = [...weeklyMap.entries()].sort((a,b) => a[0] < b[0] ? -1 : 1)
-    .map(([semana, v]) => ({ semana, ...v, tasa: v.prospectados ? Math.round(v.aceptados/v.prospectados*1000)/10 : 0 }));
-
   function breakdown(field) {
     const counts = new Map(), accs = new Map();
     data.forEach(d => {
@@ -231,13 +220,20 @@ function buildData(allRecords) {
       });
   }
 
-  // Detalle por contacto aceptado, para el filtro por semana/rango de fechas
-  // (Resumen): cuenta cuántos aceptaron invite, cuántos de esos respondieron
-  // y cuántos llegaron a agendar sesión, según la fecha en que aceptaron.
-  const aceptadosDetalle = data.filter(d => d.acc).map(d => ({
-    fecha: d.accFecha ? d.accFecha.toISOString().slice(0,10) : null,
+  // Detalle completo por contacto, para que el Resumen filtre por rango de
+  // fechas (presets de semana/mes o rango libre) y recalcule todos los KPIs
+  // y la tendencia en el navegador, sin volver a leer el Sheet. Cada fecha se
+  // manda como string ISO (o null) — cada métrica se filtra por SU propia
+  // fecha (ej. "Sesiones" por fecha de sesión agendada, no por prospección).
+  const iso = (d) => d ? d.toISOString().slice(0,10) : null;
+  const registros = data.map(d => ({
+    fp: iso(d.fp),
+    fechaInvite: iso(d.fechaInvite),
+    accFecha: iso(d.accFecha),
+    fm: iso(d.fm),
+    fechaSeguimiento: iso(d.fechaSeguimiento),
+    sesionFecha: iso(d.sesionFecha),
     respondio: d.respondio,
-    sesion: d.sesion,
     empresa: d.empresa,
     nombre: d.nombre,
   }));
@@ -250,17 +246,16 @@ function buildData(allRecords) {
       total_mensajes: totalMsg,
       updated: new Date().toISOString(),
     },
-    weekly,
     cargo: breakdown('cargo'),
     categoria_script: breakdown('categoria'),
     industria: breakdown('industria'),
-    aceptadosDetalle,
+    registros,
   };
 }
 
 // API pública del módulo
 window.Dashboard = {
-  getConfig, saveConfig, clearConfig, sheetUrlToCsvUrl,
+  getConfig, saveConfig, clearConfig, sheetUrlToCsvUrl, mondayOf,
   async load() {
     const cfg = getConfig();
     if (!cfg) throw new Error('SIN_CONFIGURAR');

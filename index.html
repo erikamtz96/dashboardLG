@@ -20,24 +20,19 @@
     <div class="banner">
       <b>Cobertura de datos:</b> el desglose usa la columna <b>Industria</b> del log (dato completo al 100%) en vez de
       Sector/Subsector de la lista maestra, porque el cruce por nombre de empresa solo cubre ~39% de los contactos.
-      Tampoco existe todavía una columna de <b>"script usado"</b> — sin ella no se puede medir qué mensaje convierte
-      mejor. Ambos puntos están detallados en el plan de trabajo de Merari.
+      "Respuestas", "Seguimientos" y "Sesiones" solo tienen datos a partir de Agosto-Diciembre 2026 — antes no se
+      capturaban.
     </div>
 
-    <div class="cards">
-      <div class="card"><div class="label">Total prospectados</div><div class="value" id="kpi-total"></div></div>
-      <div class="card"><div class="label">Invites aceptados</div><div class="value" id="kpi-acc"></div></div>
-      <div class="card"><div class="label">Tasa de aceptación</div><div class="value" id="kpi-rate"></div></div>
-      <div class="card"><div class="label">Primeros mensajes enviados</div><div class="value" id="kpi-msg"></div></div>
-    </div>
-
-    <h2 style="font-size:15px;margin:0 0 10px;">Embudo por fecha de invite aceptada</h2>
     <div class="filter-panel">
       <div class="filter-row" id="presetRow">
         <button type="button" class="preset-btn" data-preset="7">Última semana</button>
         <button type="button" class="preset-btn" data-preset="30">Último mes</button>
         <button type="button" class="preset-btn" data-preset="90">Últimos 3 meses</button>
+        <button type="button" class="preset-btn" data-preset="180">Últimos 6 meses</button>
         <button type="button" class="preset-btn active" data-preset="all">Todo</button>
+        <span class="spacer" style="flex:1"></span>
+        <button type="button" class="btn-secondary" id="clearFilterBtn">✕ Limpiar filtros</button>
       </div>
       <div class="filter-row" style="margin-top:10px;">
         <label for="fFrom">Del</label>
@@ -49,21 +44,18 @@
     </div>
 
     <div class="cards">
-      <div class="card"><div class="label">Invites aceptados (rango)</div><div class="value" id="kpi-f-acc"></div></div>
-      <div class="card"><div class="label">Respondieron mensaje</div><div class="value" id="kpi-f-resp"></div></div>
-      <div class="card"><div class="label">Sesiones agendadas</div><div class="value" id="kpi-f-sesion"></div></div>
+      <div class="card"><div class="label">Prospectados</div><div class="value" id="kpi-total"></div></div>
+      <div class="card"><div class="label">Invitaciones enviadas</div><div class="value" id="kpi-inv"></div></div>
+      <div class="card"><div class="label">Invites aceptados</div><div class="value" id="kpi-acc"></div><div class="note" id="kpi-acc-rate"></div></div>
+      <div class="card"><div class="label">Mensajes enviados</div><div class="value" id="kpi-msg"></div></div>
+      <div class="card"><div class="label">Respuestas</div><div class="value" id="kpi-resp"></div><div class="note" id="kpi-resp-rate"></div></div>
+      <div class="card"><div class="label">Seguimientos enviados</div><div class="value" id="kpi-seg"></div></div>
+      <div class="card"><div class="label">Sesiones agendadas</div><div class="value" id="kpi-sesion"></div></div>
     </div>
 
-    <div class="grid2">
-      <div class="panel">
-        <h2>Prospectados por semana</h2>
-        <canvas id="chartWeekVol"></canvas>
-      </div>
-      <div class="panel">
-        <h2>Tasa de aceptación por semana</h2>
-        <canvas id="chartWeekRate"></canvas>
-        <div class="note">Referencia: verde ≥35%, amarillo 20–34%, rojo &lt;20%</div>
-      </div>
+    <div class="panel">
+      <h2>Tendencia semanal</h2>
+      <canvas id="chartTrend" style="max-height:380px;"></canvas>
     </div>
   </div>
 
@@ -80,15 +72,14 @@ function fmtWeek(iso) {
   return d.toLocaleDateString('es-MX', {day:'2-digit', month:'short', timeZone:'UTC'});
 }
 
+function fmtDateInput(d) { return d.toISOString().slice(0,10); }
+
 async function main() {
   try {
     const DATA = await Dashboard.load();
     setNavUpdated(DATA.summary.updated);
 
-    document.getElementById('kpi-total').textContent = DATA.summary.total_prospectados;
-    document.getElementById('kpi-acc').textContent = DATA.summary.total_aceptados;
-    document.getElementById('kpi-rate').textContent = DATA.summary.tasa_aceptacion_global + '%';
-    document.getElementById('kpi-msg').textContent = DATA.summary.total_mensajes;
+    const registros = DATA.registros || [];
 
     const css = getComputedStyle(document.documentElement);
     const v = (name) => css.getPropertyValue(name).trim();
@@ -96,42 +87,91 @@ async function main() {
     Chart.defaults.color = v('--text-secondary');
     Chart.defaults.borderColor = v('--grid');
 
-    new Chart(document.getElementById('chartWeekVol'), {
-      type: 'bar',
-      data: { labels: DATA.weekly.map(w => fmtWeek(w.semana)),
-        datasets: [{ label: 'Prospectados', data: DATA.weekly.map(w => w.prospectados),
-          backgroundColor: v('--series-1'), borderRadius: 4, maxBarThickness: 48 }] },
-      options: { plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, grid: { color: v('--grid') } }, x: { grid: { display: false } } } }
-    });
+    let trendChart = null;
 
-    new Chart(document.getElementById('chartWeekRate'), {
-      type: 'line',
-      data: { labels: DATA.weekly.map(w => fmtWeek(w.semana)),
-        datasets: [{ label: 'Tasa de aceptación (%)', data: DATA.weekly.map(w => w.tasa),
-          borderColor: v('--series-2'), backgroundColor: v('--series-2'), tension: 0.25, pointRadius: 4, borderWidth: 2 }] },
-      options: { plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, ticks: { callback: (val) => val + '%' }, grid: { color: v('--grid') } }, x: { grid: { display: false } } } }
-    });
+    function inRange(dateStr, from, to) {
+      if (!dateStr) return false;
+      if (from && dateStr < from) return false;
+      if (to && dateStr > to) return false;
+      return true;
+    }
 
-    // ---- Filtro por rango de fechas (embudo: aceptó invite -> respondió -> sesión) ----
-    const detalle = (DATA.aceptadosDetalle || []).filter(d => d.fecha);
+    // ---- KPIs: cada métrica se filtra por SU propia fecha ----
+    function computeKPIs(from, to) {
+      const prospectados = registros.filter(r => inRange(r.fp, from, to)).length;
+      const invitaciones = registros.filter(r => inRange(r.fechaInvite, from, to)).length;
+      const aceptados = registros.filter(r => inRange(r.accFecha, from, to)).length;
+      const mensajes = registros.filter(r => inRange(r.fm, from, to)).length;
+      const respuestasSet = registros.filter(r => inRange(r.fm, from, to) && r.respondio);
+      const respuestas = respuestasSet.length;
+      const seguimientos = registros.filter(r => inRange(r.fechaSeguimiento, from, to)).length;
+      const sesiones = registros.filter(r => inRange(r.sesionFecha, from, to)).length;
+      const tasaAcc = invitaciones ? Math.round(aceptados/invitaciones*1000)/10 : 0;
+      const tasaResp = mensajes ? Math.round(respuestas/mensajes*1000)/10 : 0;
+      return { prospectados, invitaciones, aceptados, mensajes, respuestas, seguimientos, sesiones, tasaAcc, tasaResp };
+    }
 
-    function fmtDateInput(d) { return d.toISOString().slice(0,10); }
+    // ---- Tendencia semanal: cada métrica bucketeada por SU propia fecha ----
+    function computeWeekly(from, to) {
+      const map = new Map();
+      function add(dateStr, field) {
+        if (!inRange(dateStr, from, to)) return;
+        const wk = Dashboard.mondayOf(new Date(dateStr + 'T00:00:00Z')).toISOString().slice(0,10);
+        if (!map.has(wk)) map.set(wk, { mensajes:0, respuestas:0, invitaciones:0, seguimientos:0, sesiones:0 });
+        map.get(wk)[field]++;
+      }
+      registros.forEach(r => {
+        add(r.fm, 'mensajes');
+        if (r.fm && r.respondio) add(r.fm, 'respuestas');
+        add(r.fechaInvite, 'invitaciones');
+        add(r.fechaSeguimiento, 'seguimientos');
+        add(r.sesionFecha, 'sesiones');
+      });
+      return [...map.entries()].sort((a,b) => a[0] < b[0] ? -1 : 1).map(([semana, val]) => ({ semana, ...val }));
+    }
 
-    function applyFilter(fromStr, toStr) {
-      const from = fromStr || null;
-      const to = toStr || null;
-      const enRango = detalle.filter(d => (!from || d.fecha >= from) && (!to || d.fecha <= to));
-      const aceptados = enRango.length;
-      const respondieron = enRango.filter(d => d.respondio).length;
-      const sesiones = enRango.filter(d => d.sesion).length;
-      document.getElementById('kpi-f-acc').textContent = aceptados;
-      document.getElementById('kpi-f-resp').textContent = respondieron;
-      document.getElementById('kpi-f-sesion').textContent = sesiones;
+    function render(from, to) {
+      const k = computeKPIs(from, to);
+      document.getElementById('kpi-total').textContent = k.prospectados;
+      document.getElementById('kpi-inv').textContent = k.invitaciones;
+      document.getElementById('kpi-acc').textContent = k.aceptados;
+      document.getElementById('kpi-acc-rate').textContent = 'Tasa: ' + k.tasaAcc + '%';
+      document.getElementById('kpi-msg').textContent = k.mensajes;
+      document.getElementById('kpi-resp').textContent = k.respuestas;
+      document.getElementById('kpi-resp-rate').textContent = 'Tasa: ' + k.tasaResp + '%';
+      document.getElementById('kpi-seg').textContent = k.seguimientos;
+      document.getElementById('kpi-sesion').textContent = k.sesiones;
+
       const rangoTxt = from && to ? `del ${from} al ${to}` : (from ? `desde ${from}` : (to ? `hasta ${to}` : 'todo el histórico'));
-      document.getElementById('filterSummary').textContent =
-        `${aceptados} invite(s) aceptada(s) ${rangoTxt} — ${respondieron} respondieron mensaje, ${sesiones} llegaron a agendar sesión.`;
+      document.getElementById('filterSummary').textContent = `Mostrando ${rangoTxt}.`;
+
+      const weekly = computeWeekly(from, to);
+      const labels = weekly.map(w => fmtWeek(w.semana));
+      const series = [
+        { key: 'mensajes', label: 'Mensajes enviados', color: v('--series-1') },
+        { key: 'respuestas', label: 'Respuestas', color: v('--series-3') },
+        { key: 'invitaciones', label: 'Invitaciones enviadas', color: v('--series-4') },
+        { key: 'seguimientos', label: 'Seguimientos enviados', color: v('--series-2') },
+        { key: 'sesiones', label: 'Sesiones agendadas', color: v('--critical') },
+      ];
+
+      if (trendChart) trendChart.destroy();
+      trendChart = new Chart(document.getElementById('chartTrend'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: series.map(s => ({
+            label: s.label,
+            data: weekly.map(w => w[s.key]),
+            borderColor: s.color, backgroundColor: s.color,
+            tension: 0.25, pointRadius: 3, borderWidth: 2,
+          })),
+        },
+        options: {
+          plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } },
+          scales: { y: { beginAtZero: true, grid: { color: v('--grid') } }, x: { grid: { display: false } } },
+        }
+      });
     }
 
     const fFrom = document.getElementById('fFrom');
@@ -149,7 +189,7 @@ async function main() {
         const preset = btn.dataset.preset;
         if (preset === 'all') {
           fFrom.value = ''; fTo.value = '';
-          applyFilter(null, null);
+          render(null, null);
           return;
         }
         const days = parseInt(preset, 10);
@@ -158,16 +198,22 @@ async function main() {
         from.setDate(from.getDate() - days);
         fFrom.value = fmtDateInput(from);
         fTo.value = fmtDateInput(to);
-        applyFilter(fFrom.value, fTo.value);
+        render(fFrom.value, fTo.value);
       });
     });
 
     [fFrom, fTo].forEach(inp => inp.addEventListener('change', () => {
       setActivePreset(null);
-      applyFilter(fFrom.value || null, fTo.value || null);
+      render(fFrom.value || null, fTo.value || null);
     }));
 
-    applyFilter(null, null); // arranca mostrando "Todo"
+    document.getElementById('clearFilterBtn').addEventListener('click', () => {
+      fFrom.value = ''; fTo.value = '';
+      setActivePreset(document.querySelector('.preset-btn[data-preset="all"]'));
+      render(null, null);
+    });
+
+    render(null, null); // arranca mostrando "Todo"
 
     document.getElementById('loading').style.display = 'none';
     document.getElementById('content').style.display = 'block';
